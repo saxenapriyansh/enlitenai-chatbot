@@ -6,7 +6,6 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 import os
-from dotenv import load_dotenv
 import tempfile
 
 # Import utilities
@@ -18,9 +17,6 @@ from utils.ui import (
     display_schema_info, 
     format_sql_query
 )
-
-# Load environment variables
-load_dotenv()
 
 # Page configuration
 st.set_page_config(
