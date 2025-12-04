@@ -293,6 +293,10 @@ def main():
     """Main application"""
     init_session_state()
     
+    # Initialize managers first (before building UI)
+    if not initialize_managers():
+        return
+    
     # EnlitenAI Header
     st.markdown('<div class="enliten-logo">EnlitenAI</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Decision Support Software for Neurological Care</div>', unsafe_allow_html=True)
@@ -362,10 +366,6 @@ def main():
         
         st.divider()
         st.caption("💡 Tip: Use natural language to query patient data!")
-    
-    # Initialize managers after API configuration
-    if not initialize_managers():
-        return
     
     # Main content
     if page == "Query Interface":
@@ -447,10 +447,10 @@ def show_query_interface(query_mode: str, tts_enabled: bool, tts_voice: str):
             
             # Import audio recorder
             try:
-                from st_audiorec import st_audiorec
+                from audio_recorder_streamlit import audio_recorder
                 
                 st.write("Click the button below and speak your question:")
-                audio_bytes = st_audiorec()
+                audio_bytes = audio_recorder()
                 
                 if audio_bytes:
                     st.audio(audio_bytes, format="audio/wav")
@@ -475,7 +475,7 @@ def show_query_interface(query_mode: str, tts_enabled: bool, tts_voice: str):
                         except Exception as e:
                             st.error(f"❌ Voice processing error: {str(e)}")
             except ImportError:
-                st.warning("⚠️ Voice recording component not available. Install with: pip install streamlit-audio-recorder")
+                st.warning("⚠️ Voice recording component not available. Install with: pip install audio-recorder-streamlit")
                 st.info("You can still use Text Input mode or install the component.")
         
         elif query_mode == "Direct SQL":
