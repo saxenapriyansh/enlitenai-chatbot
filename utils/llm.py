@@ -1,55 +1,29 @@
 """
 LLM utilities for text-to-SQL conversion and query explanation
-Supports both OpenAI and Google Gemini
+Uses OpenAI GPT-4
 """
 import os
 from typing import Tuple, Optional
 from openai import OpenAI
-import google.generativeai as genai
 
 
 class LLMManager:
-    """Manages LLM interactions for text-to-SQL with multi-provider support"""
+    """Manages LLM interactions for text-to-SQL using OpenAI"""
     
-    def __init__(self, provider: Optional[str] = None, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize LLM Manager with specified provider
+        Initialize LLM Manager with OpenAI
         
         Args:
-            provider: 'openai' or 'gemini'. If None, uses LLM_PROVIDER env var or defaults to 'openai'
-            api_key: API key for the selected provider. If None, tries to get from environment variable
+            api_key: OpenAI API key. If None, tries to get from environment variable
         """
-        self.provider = provider or os.getenv("LLM_PROVIDER", "openai").lower()
-        self.api_key = api_key
-        
-        if self.provider == "openai":
-            self._init_openai()
-        elif self.provider == "gemini":
-            self._init_gemini()
-        else:
-            raise ValueError(f"Unsupported LLM provider: {self.provider}. Use 'openai' or 'gemini'")
-    
-    def _init_openai(self):
-        """Initialize OpenAI client"""
-        api_key = self.api_key or os.getenv("OPENAI_API_KEY")
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("OpenAI API key not provided. Please enter your API key.")
+            raise ValueError("OpenAI API key not found. Please set OPENAI_API_KEY environment variable.")
         
         self.client = OpenAI(api_key=api_key)
         self.model = "gpt-4-turbo-preview"
         print(f"✅ Using OpenAI ({self.model})")
-    
-    def _init_gemini(self):
-        """Initialize Google Gemini client"""
-        api_key = self.api_key or os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("Gemini API key not provided. Please enter your API key.")
-        
-        genai.configure(api_key=api_key)
-        # Use Gemini 2.0 Flash - latest and fastest model
-        self.model = "gemini-2.0-flash-exp"
-        self.client = genai.GenerativeModel(self.model)
-        print(f"✅ Using Google Gemini ({self.model})")
     
     def text_to_sql(self, natural_language_query: str, schema_description: str) -> Tuple[str, str]:
         """
@@ -79,10 +53,17 @@ Return ONLY valid SQL query, no explanations in the SQL itself."""
 Generate a clean SQL query that answers this question."""
 
         try:
-            if self.provider == "openai":
-                sql_query = self._openai_generate(system_prompt, user_prompt)
-            else:  # gemini
-                sql_query = self._gemini_generate(system_prompt, user_prompt)
+            # Generate SQL using OpenAI
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=500
+            )
+            sql_query = response.choices[0].message.content.strip()
             
             # Clean up SQL query (remove markdown code blocks if present)
             sql_query = self._clean_sql(sql_query)
@@ -94,33 +75,6 @@ Generate a clean SQL query that answers this question."""
             
         except Exception as e:
             raise Exception(f"LLM error: {str(e)}")
-    
-    def _openai_generate(self, system_prompt: str, user_prompt: str) -> str:
-        """Generate response using OpenAI"""
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=500
-        )
-        return response.choices[0].message.content.strip()
-    
-    def _gemini_generate(self, system_prompt: str, user_prompt: str) -> str:
-        """Generate response using Google Gemini"""
-        # Gemini doesn't have separate system/user roles, combine them
-        full_prompt = f"{system_prompt}\n\n{user_prompt}"
-        
-        response = self.client.generate_content(
-            full_prompt,
-            generation_config={
-                'temperature': 0.1,
-                'max_output_tokens': 500,
-            }
-        )
-        return response.text.strip()
     
     def _clean_sql(self, sql_query: str) -> str:
         """Clean SQL query by removing markdown formatting"""
@@ -142,29 +96,16 @@ The generated SQL query is:
 Provide a brief, clear explanation (2-3 sentences) of what this query does."""
 
         try:
-            if self.provider == "openai":
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.3,
-                    max_tokens=200
-                )
-                explanation = response.choices[0].message.content.strip()
-            else:  # gemini
-                full_prompt = f"{system_prompt}\n\n{user_prompt}"
-                response = self.client.generate_content(
-                    full_prompt,
-                    generation_config={
-                        'temperature': 0.3,
-                        'max_output_tokens': 200,
-                    }
-                )
-                explanation = response.text.strip()
-            
-            return explanation
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=200
+            )
+            return response.choices[0].message.content.strip()
             
         except Exception as e:
             return "Query explanation unavailable."
@@ -184,29 +125,16 @@ Query Results:
 Provide a clear, professional answer to the physician's question based on these results."""
 
         try:
-            if self.provider == "openai":
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.5,
-                    max_tokens=300
-                )
-                answer = response.choices[0].message.content.strip()
-            else:  # gemini
-                full_prompt = f"{system_prompt}\n\n{user_prompt}"
-                response = self.client.generate_content(
-                    full_prompt,
-                    generation_config={
-                        'temperature': 0.5,
-                        'max_output_tokens': 300,
-                    }
-                )
-                answer = response.text.strip()
-            
-            return answer
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.5,
+                max_tokens=300
+            )
+            return response.choices[0].message.content.strip()
             
         except Exception as e:
             return "Unable to generate answer summary."

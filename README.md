@@ -25,7 +25,7 @@ An AI-powered voice-enabled platform that allows physicians to query patient dat
 - 🗣️ **Voice Input** - Speak your queries using microphone
 - 💬 **Natural Language Processing** - Ask questions in plain English
 - 🔊 **Text-to-Speech** - Hear the answers spoken back
-- 🤖 **Multi-LLM Support** - OpenAI GPT-4 or Google Gemini for intelligent SQL generation
+- 🤖 **OpenAI GPT-4** - Intelligent SQL generation with state-of-the-art language model
 - 🔒 **Safe Queries** - Validates SQL to prevent dangerous operations
 - 📊 **Rich Visualizations** - View results in tables with download options
 - 📝 **Query History** - Track all your queries and results
@@ -38,10 +38,8 @@ An AI-powered voice-enabled platform that allows physicians to query patient dat
 ### Prerequisites
 
 - Python 3.9 or higher
-- **API Key** (choose one or both):
-  - [OpenAI API key](https://platform.openai.com/) (for GPT-4 + voice features)
-  - [Google Gemini API key](https://makersuite.google.com/app/apikey) (for Gemini text-to-SQL only)
-- Microphone (for voice input, requires OpenAI)
+- **OpenAI API Key** - [Get it here](https://platform.openai.com/)
+- Microphone (for voice input)
 
 ### Installation
 
@@ -56,34 +54,42 @@ source venv/bin/activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Run the application
+# 4. Configure API key (choose one method):
+
+# Method A: Streamlit Secrets (Recommended)
+mkdir -p .streamlit
+cp .streamlit/secrets.toml.template .streamlit/secrets.toml
+# Edit .streamlit/secrets.toml and add your OpenAI API key
+
+# Method B: Environment Variable
+echo 'OPENAI_API_KEY=your-api-key-here' > .env
+
+# 5. Run the application
 ./run.sh
 # Or directly: streamlit run app.py
-
-# 5. Configure API keys in the UI
-# Open the app and enter your API keys in the sidebar
 ```
 
 ### Configuration Options
 
-Configure your API keys directly in the application sidebar when you launch it.
+**For Local Development:**
+- Create `.streamlit/secrets.toml` from the template
+- Or use `.env` file with `OPENAI_API_KEY`
 
-**Option A: OpenAI (Full Features)**
-- Select "openai" as provider
-- Enter your OpenAI API key
+**For Streamlit Cloud:**
+1. Go to your app dashboard
+2. Click on "⚙️ Settings" → "Secrets"
+3. Add:
+```toml
+OPENAI_API_KEY = "your-api-key-here"
+```
+4. Click "Save"
+
+**OpenAI (GPT-4 + Voice Features)**
+- Uses GPT-4 Turbo for intelligent text-to-SQL conversion
+- Whisper for speech-to-text transcription
+- OpenAI TTS for natural voice output
 - ✅ Text-to-SQL ✅ Voice Input ✅ Voice Output
-
-**Option B: Gemini (Cost-Effective)**
-- Select "gemini" as provider
-- Enter your Gemini API key
-- ✅ Text-to-SQL ❌ Voice Features  
-- 💰 FREE tier: 1,500 requests/day
-
-**Option C: Hybrid (Recommended)**
-- Select "gemini" as provider
-- Enter your Gemini API key (for Text-to-SQL)
-- Optionally: Add OpenAI API key in the expandable section (for voice features)
-- ✅ Text-to-SQL (via Gemini - cheap) ✅ Voice features (via OpenAI)
+- 💰 Pay-per-use (~$0.01-0.03 per query)
 
 ---
 
@@ -143,10 +149,9 @@ How many severe seizures did patient P005 have in total?
 - **SQLite3** - In-memory database
 
 ### AI/ML
-- **OpenAI GPT-4** - Text-to-SQL conversion
-- **Google Gemini 2.0 Flash** - Alternative LLM provider
-- **OpenAI Whisper** - Speech recognition (optional)
-- **OpenAI TTS** - Text-to-speech (optional)
+- **OpenAI GPT-4 Turbo** - Text-to-SQL conversion
+- **OpenAI Whisper** - Speech recognition
+- **OpenAI TTS** - Text-to-speech
 
 ### Additional
 - **python-dotenv** - Environment management
@@ -172,7 +177,7 @@ enliten-text-sql/
 │   └── seizures_dummy.csv      # Seizure tracking
 └── utils/                      # Utility modules
     ├── db.py                   # Database management
-    ├── llm.py                  # LLM integration (OpenAI/Gemini)
+    ├── llm.py                  # LLM integration (OpenAI GPT-4)
     ├── voice.py                # Voice I/O
     └── ui.py                   # UI helpers
 ```
@@ -206,29 +211,31 @@ enliten-text-sql/
 
 ---
 
-## 💰 Cost Comparison
+## 💰 Cost Estimate
 
-| Provider | Text Query | Voice Query | 50 queries/mo | 500 queries/mo |
-|----------|------------|-------------|---------------|----------------|
-| OpenAI Only | $0.01-0.03 | $0.02-0.04 | $1-2 | $10-20 |
-| Gemini + OpenAI | $0.001 | $0.005-0.01 | $0.25-0.50 | $2.50-5 |
-| Gemini Only | $0.00 (free) | N/A | $0 | $0.50-1 |
+| Usage | Text Query | Voice Query | Monthly Cost |
+|-------|------------|-------------|--------------|
+| 50 queries/mo | $0.01-0.03 | $0.02-0.04 | $1-2 |
+| 500 queries/mo | $0.01-0.03 | $0.02-0.04 | $10-20 |
+
+**Note**: Actual costs depend on:
+- Query complexity (affects token usage)
+- Voice recording length
+- GPT-4 API pricing (check [OpenAI pricing](https://openai.com/pricing))
 
 ---
 
 ## 🔧 Troubleshooting
 
-### "API key not found" or "Please enter your API key"
-- Make sure you entered your API key in the sidebar
-- Verify you selected the correct provider (OpenAI or Gemini)
+### "API key not found"
+- Make sure you configured OPENAI_API_KEY in `.streamlit/secrets.toml` or `.env` file
 - Check that the API key is valid and has available credits
-- The key is stored in session state and needs to be re-entered each time you start the app
+- For Streamlit Cloud: Verify the secret is saved in App Settings → Secrets
 
 ### "Voice features not working"
-- Voice requires OpenAI API key
-- If using Gemini, expand the "Voice Features (Optional)" section in the sidebar
-- Enter your OpenAI API key to enable voice input/output
-- Or use text-only mode with Gemini
+- Voice requires OpenAI API key with sufficient credits
+- Check your OpenAI account has API access enabled
+- Ensure microphone permissions are granted in your browser
 
 ### Database loading errors
 ```bash
@@ -245,18 +252,12 @@ chmod 644 data/*.csv
 
 ### Getting API Keys
 
-**OpenAI:**
+**Getting Your OpenAI API Key:**
 1. Visit https://platform.openai.com/
 2. Sign up or log in
 3. Navigate to https://platform.openai.com/api-keys
 4. Create new secret key
-5. Add $5-10 credit to your account
-
-**Google Gemini:**
-1. Visit https://makersuite.google.com/app/apikey
-2. Sign in with Google account
-3. Click "Create API Key"
-4. Copy the key (free tier: 1,500 requests/day)
+5. Add $5-10 credit to your account for API access
 
 ### Running the Application
 
@@ -273,15 +274,17 @@ streamlit run app.py --server.port 8501
 
 ### API Configuration
 
-API keys are now configured directly in the application UI:
+The application automatically loads your API key from Streamlit secrets or environment variables:
 
-1. Launch the application
-2. Look for the **🔑 API Configuration** section in the sidebar
-3. Select your preferred provider (OpenAI or Gemini)
-4. Enter your API key in the password-protected field
-5. For Gemini users: Optionally add OpenAI key for voice features
+**Local Development:**
+- Create `.streamlit/secrets.toml` with your API key, OR
+- Create `.env` file with `OPENAI_API_KEY=your-key`
 
-**Note:** API keys are stored only in the session and need to be entered each time you start the app. They are never saved to disk or transmitted anywhere except to the respective AI providers.
+**Streamlit Cloud:**
+- Go to App Settings → Secrets
+- Add: `OPENAI_API_KEY = "your-key"`
+
+**Note:** API keys are never stored in the codebase or git repository.
 
 ---
 

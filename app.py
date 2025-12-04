@@ -190,61 +190,42 @@ def init_session_state():
         st.session_state.query_input = ""
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Query Interface"
-    if 'llm_provider' not in st.session_state:
-        st.session_state.llm_provider = os.getenv("LLM_PROVIDER", "openai").lower()
-    if 'openai_api_key' not in st.session_state:
-        st.session_state.openai_api_key = os.getenv("OPENAI_API_KEY", "")
-    if 'gemini_api_key' not in st.session_state:
-        st.session_state.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-    if 'api_keys_configured' not in st.session_state:
-        st.session_state.api_keys_configured = False
 
 
 def initialize_managers():
     """Initialize all managers"""
     try:
+        # Get API key from Streamlit secrets or environment variable
+        try:
+            api_key = st.secrets["OPENAI_API_KEY"]
+        except (KeyError, FileNotFoundError):
+            api_key = os.getenv("OPENAI_API_KEY")
+        
+        if not api_key:
+            st.error("⚠️ OpenAI API key not found. Please configure OPENAI_API_KEY in Streamlit secrets or .env file")
+            st.info("💡 For Streamlit Cloud: Go to App Settings → Secrets and add:\n```\nOPENAI_API_KEY = \"your-api-key-here\"\n```")
+            st.stop()
+        
         # Initialize database
         if st.session_state.db_manager is None:
             with st.spinner("Loading database..."):
                 st.session_state.db_manager = DatabaseManager("data")
                 st.session_state.db_manager.load_csvs_to_db()
         
-        # Initialize LLM
+        # Initialize LLM (OpenAI only)
         if st.session_state.llm_manager is None:
-            provider = st.session_state.llm_provider
-            
-            # Check for appropriate API key
-            if provider == "openai":
-                api_key = st.session_state.openai_api_key
-                if not api_key:
-                    st.error("⚠️ OpenAI API key not provided. Please enter your API key in the sidebar.")
-                    st.stop()
-            elif provider == "gemini":
-                api_key = st.session_state.gemini_api_key
-                if not api_key:
-                    st.error("⚠️ Gemini API key not provided. Please enter your API key in the sidebar.")
-                    st.stop()
-            else:
-                st.error(f"⚠️ Unsupported provider: {provider}")
-                st.stop()
-            
             try:
-                st.session_state.llm_manager = LLMManager(provider, api_key)
-                st.session_state.api_keys_configured = True
+                st.session_state.llm_manager = LLMManager(api_key)
             except Exception as e:
                 st.error(f"⚠️ LLM initialization error: {str(e)}")
                 st.stop()
         
-        # Initialize Voice (requires OpenAI)
+        # Initialize Voice (OpenAI)
         if st.session_state.voice_manager is None:
-            if st.session_state.openai_api_key:
-                try:
-                    st.session_state.voice_manager = VoiceManager(st.session_state.openai_api_key)
-                except Exception as e:
-                    st.warning(f"⚠️ Voice features unavailable: {str(e)}")
-                    st.session_state.voice_manager = None
-            else:
-                st.warning("⚠️ Voice features require OpenAI API key. Enter your OpenAI API key to enable voice input/output.")
+            try:
+                st.session_state.voice_manager = VoiceManager(api_key)
+            except Exception as e:
+                st.warning(f"⚠️ Voice features unavailable: {str(e)}")
                 st.session_state.voice_manager = None
             
         return True
@@ -329,76 +310,6 @@ def main():
             st.markdown("**Medical Data Query System**")
             st.markdown("---")
         
-        # API Configuration Section
-        st.title("🔑 API Configuration")
-        
-        # LLM Provider selection
-        provider = st.selectbox(
-            "Select AI Provider",
-            ["openai", "gemini"],
-            index=0 if st.session_state.llm_provider == "openai" else 1,
-            help="Choose your preferred AI model provider"
-        )
-        
-        # Update provider if changed
-        if provider != st.session_state.llm_provider:
-            st.session_state.llm_provider = provider
-            st.session_state.llm_manager = None  # Reset manager on provider change
-            st.session_state.api_keys_configured = False
-        
-        # API Key inputs based on provider
-        if provider == "openai":
-            openai_key = st.text_input(
-                "OpenAI API Key",
-                value=st.session_state.openai_api_key,
-                type="password",
-                help="Enter your OpenAI API key (required for GPT-4 and voice features)"
-            )
-            if openai_key != st.session_state.openai_api_key:
-                st.session_state.openai_api_key = openai_key
-                st.session_state.llm_manager = None
-                st.session_state.voice_manager = None
-                st.session_state.api_keys_configured = False
-            
-            if st.session_state.openai_api_key:
-                st.success("✅ OpenAI API Key configured")
-            else:
-                st.warning("⚠️ Please enter your OpenAI API Key")
-        
-        elif provider == "gemini":
-            gemini_key = st.text_input(
-                "Gemini API Key",
-                value=st.session_state.gemini_api_key,
-                type="password",
-                help="Enter your Google Gemini API key"
-            )
-            if gemini_key != st.session_state.gemini_api_key:
-                st.session_state.gemini_api_key = gemini_key
-                st.session_state.llm_manager = None
-                st.session_state.api_keys_configured = False
-            
-            if st.session_state.gemini_api_key:
-                st.success("✅ Gemini API Key configured")
-            else:
-                st.warning("⚠️ Please enter your Gemini API Key")
-            
-            # Optional OpenAI key for voice features
-            with st.expander("🎤 Voice Features (Optional)"):
-                st.info("Voice features require OpenAI API key")
-                openai_key_voice = st.text_input(
-                    "OpenAI API Key (for voice)",
-                    value=st.session_state.openai_api_key,
-                    type="password",
-                    help="Optional: Enable voice input/output with OpenAI Whisper and TTS"
-                )
-                if openai_key_voice != st.session_state.openai_api_key:
-                    st.session_state.openai_api_key = openai_key_voice
-                    st.session_state.voice_manager = None
-                
-                if st.session_state.openai_api_key:
-                    st.success("✅ Voice features available")
-        
-        st.divider()
         
         st.title("📋 Navigation")
         
@@ -415,10 +326,10 @@ def main():
         
         st.divider()
         
-        # Show LLM provider info with better styling
-        st.markdown(f"""
+        # Show LLM provider info
+        st.markdown("""
         <div class="info-box" style="padding: 0.75rem; margin-bottom: 1rem;">
-            <strong>🤖 AI Model:</strong> {st.session_state.llm_provider.upper()}
+            <strong>🤖 AI Model:</strong> OPENAI (GPT-4)
         </div>
         """, unsafe_allow_html=True)
         
