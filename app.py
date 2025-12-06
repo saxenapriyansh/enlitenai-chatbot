@@ -190,20 +190,24 @@ def init_session_state():
         st.session_state.query_input = ""
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Query Interface"
+    if 'debug_mode' not in st.session_state:
+        st.session_state.debug_mode = False
 
 
 def initialize_managers():
     """Initialize all managers"""
     try:
-        # Get API key from Streamlit secrets or environment variable
+        # Get API keys from Streamlit secrets or environment variables
         try:
-            api_key = st.secrets["OPENAI_API_KEY"]
-        except (KeyError, FileNotFoundError):
-            api_key = os.getenv("OPENAI_API_KEY")
+            gemini_key = st.secrets.get("GEMINI_API_KEY")
+            openai_key = st.secrets.get("OPENAI_API_KEY")
+        except (KeyError, FileNotFoundError, AttributeError):
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            openai_key = os.getenv("OPENAI_API_KEY")
         
-        if not api_key:
-            st.error("⚠️ OpenAI API key not found. Please configure OPENAI_API_KEY in Streamlit secrets or .env file")
-            st.info("💡 For Streamlit Cloud: Go to App Settings → Secrets and add:\n```\nOPENAI_API_KEY = \"your-api-key-here\"\n```")
+        if not gemini_key:
+            st.error("⚠️ Gemini API key not found. Please configure GEMINI_API_KEY in Streamlit secrets or .env file")
+            st.info("💡 For Streamlit Cloud: Go to App Settings → Secrets and add:\n```\nGEMINI_API_KEY = \"your-gemini-key\"\nOPENAI_API_KEY = \"your-openai-key\"  # For voice features\n```")
             st.stop()
         
         # Initialize database
@@ -212,20 +216,24 @@ def initialize_managers():
                 st.session_state.db_manager = DatabaseManager("data")
                 st.session_state.db_manager.load_csvs_to_db()
         
-        # Initialize LLM (OpenAI only)
+        # Initialize LLM (Gemini for cost-effectiveness)
         if st.session_state.llm_manager is None:
             try:
-                st.session_state.llm_manager = LLMManager(api_key)
+                st.session_state.llm_manager = LLMManager(provider="gemini", api_key=gemini_key)
             except Exception as e:
                 st.error(f"⚠️ LLM initialization error: {str(e)}")
                 st.stop()
         
-        # Initialize Voice (OpenAI)
+        # Initialize Voice (OpenAI - optional)
         if st.session_state.voice_manager is None:
-            try:
-                st.session_state.voice_manager = VoiceManager(api_key)
-            except Exception as e:
-                st.warning(f"⚠️ Voice features unavailable: {str(e)}")
+            if openai_key:
+                try:
+                    st.session_state.voice_manager = VoiceManager(openai_key)
+                except Exception as e:
+                    st.warning(f"⚠️ Voice features unavailable: {str(e)}")
+                    st.session_state.voice_manager = None
+            else:
+                st.info("💡 Voice features disabled. Add OPENAI_API_KEY to Streamlit secrets to enable voice input/output.")
                 st.session_state.voice_manager = None
             
         return True
@@ -253,18 +261,20 @@ def process_text_query(query: str):
             st.error(f"❌ SQL validation failed: {error_msg}")
             return
         
-        # Display generated SQL
-        st.subheader("🔍 Generated SQL Query")
-        st.code(format_sql_query(sql_query), language="sql")
-        st.info(f"**Explanation:** {explanation}")
+        # Display generated SQL (only in debug mode)
+        if st.session_state.debug_mode:
+            st.subheader("🔍 Generated SQL Query")
+            st.code(format_sql_query(sql_query), language="sql")
+            st.info(f"**Explanation:** {explanation}")
         
         # Execute query
         with st.spinner("⚙️ Executing query..."):
             results = db.execute_query(sql_query)
         
-        # Display results
-        st.subheader("📊 Query Results")
-        display_query_results(results)
+        # Display results (only in debug mode)
+        if st.session_state.debug_mode:
+            st.subheader("📊 Query Results")
+            display_query_results(results)
         
         # Generate natural language answer
         with st.spinner("💬 Generating answer..."):
@@ -330,42 +340,52 @@ def main():
         
         st.divider()
         
-        # Show LLM provider info
-        st.markdown("""
-        <div class="info-box" style="padding: 0.75rem; margin-bottom: 1rem;">
-            <strong>🤖 AI Model:</strong> OPENAI (GPT-4)
-        </div>
-        """, unsafe_allow_html=True)
+        # Debug mode toggle
+        st.subheader("🔧 Developer Options")
+        debug_mode = st.checkbox("Debug Mode", value=st.session_state.debug_mode, 
+                                  help="Show technical details like SQL queries and provider info")
+        if debug_mode != st.session_state.debug_mode:
+            st.session_state.debug_mode = debug_mode
+        
+        # Show advanced options only in debug mode
+        if st.session_state.debug_mode:
+            st.markdown("""
+            <div class="info-box" style="padding: 0.75rem; margin-bottom: 1rem;">
+                <strong>🤖 SQL Generation:</strong> GEMINI (Free)<br>
+                <strong>🎤 Voice Features:</strong> OPENAI
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.divider()
+            
+            # Mode selection
+            st.subheader("Query Mode")
+            
+            query_mode = st.radio(
+                "Choose input method:",
+                ["Text Input", "Direct SQL"],
+                label_visibility="collapsed"
+            )
+            
+            st.divider()
+            
+            # Settings
+            st.subheader("⚙️ Settings")
+            tts_enabled = st.checkbox("Enable Text-to-Speech", value=True)
+            tts_voice = st.selectbox(
+                "TTS Voice",
+                ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+                index=0
+            )
+        else:
+            # Default values when debug mode is off
+            query_mode = "Text Input"
+            tts_enabled = True
+            tts_voice = "alloy"
         
         st.divider()
-        
-        # Mode selection
-        st.subheader("Query Mode")
-        
-        # Check if voice is available
-        available_modes = ["Text Input", "Direct SQL"]
-        if st.session_state.voice_manager is not None:
-            available_modes.insert(1, "Voice Input")
-        
-        query_mode = st.radio(
-            "Choose input method:",
-            available_modes,
-            label_visibility="collapsed"
-        )
-        
-        st.divider()
-        
-        # Settings
-        st.subheader("⚙️ Settings")
-        tts_enabled = st.checkbox("Enable Text-to-Speech", value=True)
-        tts_voice = st.selectbox(
-            "TTS Voice",
-            ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
-            index=0
-        )
-        
-        st.divider()
-        st.caption("💡 Tip: Use natural language to query patient data!")
+        voice_tip = "🎤 Voice enabled" if st.session_state.voice_manager else "💬 Text mode"
+        st.caption(f"💡 Tip: Use natural language to query patient data! | {voice_tip}")
     
     # Main content
     if page == "Query Interface":
@@ -380,11 +400,12 @@ def show_query_interface(query_mode: str, tts_enabled: bool, tts_voice: str):
     """Display the main query interface with improved layout"""
     
     # Quick help banner
-    st.markdown("""
+    voice_note = "🎤 Voice input available!" if st.session_state.voice_manager else ""
+    st.markdown(f"""
     <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); 
                 padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem; 
                 border-left: 4px solid #0066cc;">
-        <strong>💬 Ask questions in plain English</strong> — No SQL knowledge required!<br>
+        <strong>💬 Ask questions in plain English</strong>  {voice_note}<br>
         <span style="font-size: 0.9rem; color: #555;">
         Examples: "What is the average QoL score?" • "Show seizure trends" • "Compare medication dosages"
         </span>
@@ -397,86 +418,84 @@ def show_query_interface(query_mode: str, tts_enabled: bool, tts_voice: str):
     with main_col:
         # Query input section
         st.markdown("### 🔍 Your Question")
-        st.markdown('<p style="color: #666; font-size: 0.9rem; margin-bottom: 0.5rem;">Ask about patients, medications, seizures, or assessments</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">Ask your question using text or voice</p>', unsafe_allow_html=True)
         
         if query_mode == "Text Input":
-            query = st.text_area(
-                "Type your question in natural language:",
-                value=st.session_state.query_input,
-                height=120,
-                placeholder="e.g., What is the average QoL score for patient P001?",
-                label_visibility="collapsed"
+            # Create two equal columns for text and voice input
+            input_method = st.radio(
+                "Choose input method:",
+                ["💬 Type Your Question", "🎤 Speak Your Question"],
+                horizontal=True,
+                label_visibility="visible"
             )
             
-            # Action buttons
-            col1, col2, col3 = st.columns([2, 1, 1])
-            with col1:
+            st.markdown("---")
+            
+            if input_method == "💬 Type Your Question":
+                # Text input
+                query = st.text_area(
+                    "Type your question:",
+                    value=st.session_state.query_input,
+                    height=120,
+                    placeholder="e.g., What is the average QoL score for patient P001?",
+                    label_visibility="collapsed"
+                )
+                
+                # Action button
                 submit_button = st.button("🔍 Search", type="primary", use_container_width=True)
-            with col2:
-                clear_button = st.button("🗑️ Clear", use_container_width=True)
-            with col3:
-                if st.button("📊 Schema", use_container_width=True):
-                    st.session_state.current_page = "Database Schema"
-                    st.rerun()
-            
-            if clear_button:
-                st.session_state.query_input = ""
-                st.rerun()
-            
-            if submit_button and query:
-                answer = process_text_query(query)
                 
-                # Text-to-speech (if available)
-                if tts_enabled and answer and st.session_state.voice_manager:
-                    try:
-                        with st.spinner("🔊 Generating audio..."):
-                            voice_mgr = st.session_state.voice_manager
-                            audio_bytes = voice_mgr.text_to_speech(answer, voice=tts_voice)
-                        
-                        st.audio(audio_bytes, format="audio/mp3")
-                    except Exception as e:
-                        st.warning(f"TTS unavailable: {str(e)}")
-    
-        elif query_mode == "Voice Input":
-            if st.session_state.voice_manager is None:
-                st.error("⚠️ Voice features require OpenAI API key. Please set OPENAI_API_KEY in .env file.")
-                st.info("💡 You can still use Text Input or Direct SQL modes with Gemini.")
-                return
-            
-            st.info("🎤 Voice input requires microphone access")
-            
-            # Import audio recorder
-            try:
-                from audio_recorder_streamlit import audio_recorder
-                
-                st.write("Click the button below and speak your question:")
-                audio_bytes = audio_recorder()
-                
-                if audio_bytes:
-                    st.audio(audio_bytes, format="audio/wav")
+                if submit_button and query:
+                    answer = process_text_query(query)
                     
-                    if st.button("🔍 Process Voice Query", type="primary"):
+                    # Text-to-speech (if available)
+                    if tts_enabled and answer and st.session_state.voice_manager:
                         try:
-                            with st.spinner("🎧 Transcribing audio..."):
+                            with st.spinner("🔊 Generating audio..."):
                                 voice_mgr = st.session_state.voice_manager
-                                transcribed_text = voice_mgr.transcribe_audio(audio_bytes, "wav")
+                                audio_bytes = voice_mgr.text_to_speech(answer, voice=tts_voice)
                             
-                            st.success(f"**Transcribed:** {transcribed_text}")
-                            
-                            # Process the transcribed query
-                            answer = process_text_query(transcribed_text)
-                            
-                            # Text-to-speech response
-                            if tts_enabled and answer:
-                                with st.spinner("🔊 Generating audio response..."):
-                                    audio_response = voice_mgr.text_to_speech(answer, voice=tts_voice)
-                                st.audio(audio_response, format="audio/mp3")
-                                
+                            st.audio(audio_bytes, format="audio/mp3")
                         except Exception as e:
-                            st.error(f"❌ Voice processing error: {str(e)}")
-            except ImportError:
-                st.warning("⚠️ Voice recording component not available. Install with: pip install audio-recorder-streamlit")
-                st.info("You can still use Text Input mode or install the component.")
+                            st.warning(f"TTS unavailable: {str(e)}")
+            
+            else:  # Voice input
+                if st.session_state.voice_manager is not None:
+                    try:
+                        from audio_recorder_streamlit import audio_recorder
+                        
+                        st.write("Click the button below and speak your question:")
+                        audio_bytes = audio_recorder(key="voice_recorder")
+                        
+                        if audio_bytes:
+                            st.audio(audio_bytes, format="audio/wav")
+                            
+                            if st.button("🎤 Transcribe & Search", type="primary", use_container_width=True):
+                                try:
+                                    with st.spinner("🎧 Transcribing..."):
+                                        voice_mgr = st.session_state.voice_manager
+                                        transcribed_text = voice_mgr.transcribe_audio(audio_bytes, "wav")
+                                    
+                                    st.info(f"🎤 Voice input: \"{transcribed_text}\"")
+                                    
+                                    # Process the query directly
+                                    answer = process_text_query(transcribed_text)
+                                    
+                                    # Text-to-speech for answer (if enabled)
+                                    if tts_enabled and answer:
+                                        try:
+                                            with st.spinner("🔊 Generating audio..."):
+                                                audio_bytes = voice_mgr.text_to_speech(answer, voice=tts_voice)
+                                            
+                                            st.audio(audio_bytes, format="audio/mp3")
+                                        except Exception as e:
+                                            st.warning(f"TTS unavailable: {str(e)}")
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ Voice processing error: {str(e)}")
+                    except ImportError:
+                        st.warning("Voice recording unavailable. Install: pip install audio-recorder-streamlit")
+                else:
+                    st.warning("🎤 Voice features are not available. Please add OPENAI_API_KEY to enable voice input.")
         
         elif query_mode == "Direct SQL":
             st.warning("⚠️ Advanced mode: Enter SQL queries directly")
@@ -521,6 +540,21 @@ def show_schema_page():
     
     if st.session_state.db_manager:
         schema_info = st.session_state.db_manager.get_schema_info()
+        total_records = sum(info['row_count'] for info in schema_info.values())
+        
+        # Data Overview at the top
+        st.markdown("### 📊 Data Overview")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Tables", "3")
+        with col2:
+            st.metric("Records", f"{total_records:,}")
+        with col3:
+            st.metric("Patients", "5")
+        
+        st.markdown("---")
+        
+        # Show schema details
         display_schema_info(schema_info)
         
         # Show table statistics
@@ -594,20 +628,6 @@ def show_example_queries_compact():
                 if st.button(query, key=f"example_{query[:30]}", use_container_width=True):
                     st.session_state.query_input = query
                     st.rerun()
-    
-    # Quick stats
-    st.markdown("---")
-    st.markdown("##### 📊 Data Overview")
-    if st.session_state.db_manager:
-        schema = st.session_state.db_manager.get_schema_info()
-        total_records = sum(info['row_count'] for info in schema.values())
-        st.markdown(f"""
-        <div style="font-size: 0.85rem; color: #666;">
-        • <strong>3</strong> tables<br>
-        • <strong>{total_records:,}</strong> records<br>
-        • <strong>5</strong> patients
-        </div>
-        """, unsafe_allow_html=True)
 
 
 def show_footer():

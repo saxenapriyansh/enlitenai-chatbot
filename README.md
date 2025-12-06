@@ -38,7 +38,8 @@ An AI-powered voice-enabled platform that allows physicians to query patient dat
 ### Prerequisites
 
 - Python 3.9 or higher
-- **OpenAI API Key** - [Get it here](https://platform.openai.com/)
+- **Gemini API Key** (Required, FREE) - [Get it here](https://makersuite.google.com/app/apikey)
+- **OpenAI API Key** (Optional, for voice) - [Get it here](https://platform.openai.com/)
 - Microphone (for voice input)
 
 ### Installation
@@ -84,12 +85,13 @@ OPENAI_API_KEY = "your-api-key-here"
 ```
 4. Click "Save"
 
-**OpenAI (GPT-4 + Voice Features)**
-- Uses GPT-4 Turbo for intelligent text-to-SQL conversion
-- Whisper for speech-to-text transcription
-- OpenAI TTS for natural voice output
-- ✅ Text-to-SQL ✅ Voice Input ✅ Voice Output
-- 💰 Pay-per-use (~$0.01-0.03 per query)
+**Hybrid Configuration (Gemini + OpenAI)**
+- **Gemini**: Text-to-SQL generation (FREE - 1,500 requests/day)
+- **OpenAI**: Voice features only (paid)
+  - Whisper for speech-to-text
+  - TTS for voice output
+- ✅ Text-to-SQL (Free) ✅ Voice Input ✅ Voice Output
+- 💰 ~95% cost reduction: Only pay for voice features when used (~$0.005-0.01 per voice query)
 
 ---
 
@@ -149,9 +151,9 @@ How many severe seizures did patient P005 have in total?
 - **SQLite3** - In-memory database
 
 ### AI/ML
-- **OpenAI GPT-4 Turbo** - Text-to-SQL conversion
-- **OpenAI Whisper** - Speech recognition
-- **OpenAI TTS** - Text-to-speech
+- **Google Gemini 2.0 Flash** - Text-to-SQL conversion (FREE)
+- **OpenAI Whisper** - Speech recognition (optional)
+- **OpenAI TTS** - Text-to-speech (optional)
 
 ### Additional
 - **python-dotenv** - Environment management
@@ -211,17 +213,18 @@ enliten-text-sql/
 
 ---
 
-## 💰 Cost Estimate
+## 💰 Cost Estimate (Hybrid: Gemini + OpenAI)
 
 | Usage | Text Query | Voice Query | Monthly Cost |
 |-------|------------|-------------|--------------|
-| 50 queries/mo | $0.01-0.03 | $0.02-0.04 | $1-2 |
-| 500 queries/mo | $0.01-0.03 | $0.02-0.04 | $10-20 |
+| 50 queries/mo | **$0** (free) | ~$0.25-0.50 | **~$0.50** |
+| 500 queries/mo | **$0** (free) | ~$2.50-5.00 | **~$5** |
 
-**Note**: Actual costs depend on:
-- Query complexity (affects token usage)
-- Voice recording length
-- GPT-4 API pricing (check [OpenAI pricing](https://openai.com/pricing))
+**Cost Breakdown:**
+- 🆓 **Text-to-SQL (Gemini)**: FREE for up to 1,500 requests/day
+- 💰 **Voice Features (OpenAI)**: ~$0.006/min STT + ~$0.015/1K chars TTS
+
+**Savings**: ~95% cost reduction vs OpenAI-only (~$10-20/month → ~$0.50-5/month)
 
 ---
 
@@ -252,12 +255,19 @@ chmod 644 data/*.csv
 
 ### Getting API Keys
 
-**Getting Your OpenAI API Key:**
+**Getting Your Gemini API Key (Required, FREE):**
+1. Visit https://makersuite.google.com/app/apikey
+2. Sign in with Google account
+3. Click "Create API Key"
+4. Copy the key
+5. Free tier: 1,500 requests/day
+
+**Getting Your OpenAI API Key (Optional, for voice):**
 1. Visit https://platform.openai.com/
 2. Sign up or log in
 3. Navigate to https://platform.openai.com/api-keys
 4. Create new secret key
-5. Add $5-10 credit to your account for API access
+5. Add $5-10 credit to your account
 
 ### Running the Application
 
